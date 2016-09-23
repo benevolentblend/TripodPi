@@ -2,7 +2,10 @@ import time
 import math
 
 class Servo:
-    """docstring for Servo."""
+    """
+    Controls the position of a Servo using velocity and acceleration to
+    move the sevro to different target positions
+    """
 
     global covD2S, covS2D, calculateDistance
 
@@ -78,8 +81,6 @@ class Servo:
         self.rampDownTime = self.maxVelocity / self.acceleration
         self.rampDownDistance = calculateDistance(self.maxVelocity, 0 - self.acceleration, self.rampDownTime) * self.direction
 
-
-
         if math.fabs(self.rampUpDistance + self.rampUpDistance) > math.fabs(distance):
             print('Ramp up and down bigger than distance!!!!')
             self.target = self.position
@@ -93,8 +94,6 @@ class Servo:
             self.startCruise = self.rampUpTime
             self.startRampDown = self.startCruise + self.cruiseTime
             self.finished = self.startRampDown + self.rampDownTime
-
-
 
     def updatePosition(self, ctime):
         if self.position == self.target:
