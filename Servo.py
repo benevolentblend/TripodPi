@@ -1,5 +1,9 @@
 import time
 import math
+import Adafruit_PCA9685
+
+pwm = Adafruit_PCA9685.PCA9685()
+pwm.set_pwm_freq(60)
 
 class Servo:
     """
@@ -39,13 +43,17 @@ class Servo:
         self.position = min
         self.velocity = 0
 
-        self.maxVelocity = 200.0 # Must be a decimal and > 0
-        self.acceleration = 500.0 # Must be a decimal and > 0
+        self.maxABSVelocity = 200.0 # Must be a decimal and > 0
+        self.maxABSacceleration = 500.0 # Must be a decimal and > 0
 
         self.startPosition = 0
         self.startTime = 0
         self.initialVelocity = 0
         self.direction = 1
+
+        self.rampUpAcceleration = 0
+        self.rampDownAcceleration = 0
+        self.cruiseVelocity = 0
 
         self.rampUpTime = 0
         self.cruiseTime = 0
@@ -70,23 +78,27 @@ class Servo:
         self.target = newTarget
         distance = self.target - self.startPosition
 
-        if distance > 0:
-            self.direction = 1
-        else:
-            self.direction = -1
+        if distance > 0: # positive direction
+            self.rampUpAcceleration = self.maxABSacceleration
+            self.rampDownAcceleration = -self.maxABSacceleration
+            self.cruiseVelocity = self.maxABSVelocity
+        else: # negative direction
+            self.rampUpAcceleration = -self.maxABSacceleration
+            self.rampDownAcceleration = self.maxABSacceleration
+            self.cruiseVelocity = -self.maxABSVelocity
 
-        self.rampUpTime = (self.maxVelocity - self.initialVelocity) / self.acceleration
-        self.rampUpDistance = calculateDistance(self.initialVelocity, self.acceleration, self.rampUpTime) * self.direction
+        self.rampUpTime = math.fabs((self.cruiseVelocity - self.initialVelocity) / self.rampUpAcceleration)
+        self.rampUpDistance = calculateDistance(self.initialVelocity, self.rampUpAcceleration, self.rampUpTime)
 
-        self.rampDownTime = self.maxVelocity / self.acceleration
-        self.rampDownDistance = calculateDistance(self.maxVelocity, 0 - self.acceleration, self.rampDownTime) * self.direction
+        self.rampDownTime = math.fabs(self.cruiseVelocity / self.rampDownAcceleration)
+        self.rampDownDistance = calculateDistance(self.cruiseVelocity, self.rampDownAcceleration, self.rampDownTime)
 
         if math.fabs(self.rampUpDistance + self.rampUpDistance) > math.fabs(distance):
             print('Ramp up and down bigger than distance!!!!')
             self.target = self.position
         else:
             self.cruiseDistance = distance - self.rampUpDistance - self.rampDownDistance
-            self.cruiseTime = math.fabs(self.cruiseDistance / self.maxVelocity)
+            self.cruiseTime = math.fabs(self.cruiseDistance / self.cruiseVelocity)
 
             self.startTime = time.time()
 
@@ -102,22 +114,25 @@ class Servo:
         currentTime = time.time() - self.startTime
 
         if self.startRampUp <= currentTime and currentTime < self.startCruise:
-            self.position = self.startPosition + calculateDistance(self.initialVelocity, self.acceleration, currentTime) * self.direction
-            self.velocity = self.initialVelocity * self.direction + self.acceleration * currentTime * self.direction
+            self.position = self.startPosition + calculateDistance(self.initialVelocity, self.rampUpAcceleration, currentTime)
+            self.velocity = self.initialVelocity + self.rampUpAcceleration * currentTime
             stage = 'RAMP UP'
         elif self.startCruise <= currentTime and currentTime < self.startRampDown:
-            self.position = self.startPosition + self.rampUpDistance + self.maxVelocity * (currentTime - self.startCruise) * self.direction
-            self.velocity = self.maxVelocity * self.direction
+            self.position = self.startPosition + self.rampUpDistance + self.cruiseVelocity * (currentTime - self.startCruise)
+            self.velocity = self.cruiseVelocity
             stage = 'CRUISE'
         elif self.startRampDown <= currentTime and currentTime < self.finished:
-            self.position = self.startPosition + self.rampUpDistance + self.cruiseDistance + calculateDistance(self.maxVelocity, 0 - self.acceleration, currentTime - self.startRampDown) * self.direction
-            self.velocity = self.maxVelocity * self.direction + (0 - self.acceleration) * (currentTime - self.startRampDown) * self.direction
+            self.position = self.startPosition + self.rampUpDistance + self.cruiseDistance + calculateDistance(self.cruiseVelocity, self.rampDownAcceleration, currentTime - self.startRampDown)
+            self.velocity = self.cruiseVelocity + self.rampDownAcceleration * (currentTime - self.startRampDown)
             stage = 'RAMP DOWN'
         else:
             self.position = self.target
             self.velocity = 0
             stage = 'DONE'
 
-        print('{0:10} position: {1:7.3f}, velocity: {2:7.3f}'.format(stage, self.position, self.velocity))
+
+
+        print('{0:10} position: {1:8.3f}, velocity: {2:8.3f}, time:{3:8.3f}'.format(stage, self.position, self.velocity, currentTime))
+        pwm.set_pwm(self.port, 0, covD2S(self.position))
 
         return self.position
