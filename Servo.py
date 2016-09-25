@@ -104,25 +104,20 @@ class Servo:
 
             self.cruiseDistance = 0
             self.cruiseTime = 0
-            self.cruiseVelocity = self.rampUpTime * self.maxABSacceleration
+            self.cruiseVelocity = self.rampUpTime * self.rampUpAcceleration
 
-            if distance < 0:
-                self.cruiseVelocity = -self.cruiseVelocity
+            if math.fabs(self.initialVelocity + self.cruiseVelocity) > math.fabs(self.cruiseVelocity): # initial velocity approaching cruise velocity
+                timeDiff = math.fabs(self.initialVelocity / self.rampUpAcceleration)
+                distanceDiff = calculateDistance(0, self.rampUpAcceleration, timeDiff)
+
+                self.rampUpTime -= timeDiff
+                self.rampUpDistance -= distanceDiff
+                self.cruiseTime = distanceDiff / self.cruiseVelocity
+                self.cruiseDistance = distanceDiff
 
 
-            if self.initialVelocity + self.cruiseVelocity > self.cruiseVelocity: # initial velocity approaching cruise velocity
-                # timeDiff = math.fabs(self.initialVelocity / self.maxABSacceleration)
-                # distanceDiff = calculateDistance(self.initialVelocity, self.maxABSacceleration, timeDiff)
-                # self.rampUpTime -= timeDiff
-                # self.rampUpDistance -= distanceDiff
-                #
-                # self.cruiseTime = timeDiff
-                # self.cruiseDistance = distanceDiff
-                #
-                self.position = self.target
-                return
+            if math.fabs(self.initialVelocity + self.cruiseVelocity) < math.fabs(self.cruiseVelocity): # initial velocity dissenting cruise velocity
 
-            if self.initialVelocity + self.cruiseVelocity < self.cruiseVelocity: # initial velocity dissenting cruise velocity
                 self.position = self.target
                 return
 
@@ -166,4 +161,4 @@ class Servo:
 
     def setPosition(self, pos):
         self.position = pos
-        #pwm.set_pwm(self.port, 0, covD2S(pos))
+        pwm.set_pwm(self.port, 0, covD2S(pos))
