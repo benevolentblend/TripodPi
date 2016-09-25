@@ -11,29 +11,36 @@ tilt_min = 10
 tilt_max = 150
 
 pan_min = 0
-pan_max = 150
+pan_max = 180
 
 target = open('data.csv', 'w')
 target.truncate()
 target.write('time,position,velocity\n')
 
 panServo = Servo(pan, pan_max, pan_min)
+tiltServo = Servo(tilt, tilt_max, tilt_min)
 
-panServo.position = pan_min
-# panServo.maxABSVelocity = 50
-# panServo.maxABSacceleration = 50
+panServo.setPosition(pan_min)
+tiltServo.setPosition(tilt_min)
+
+time.sleep(1)
+
+
+panServo.maxABSVelocity = 1000.0
+panServo.maxABSacceleration = 25.0
 
 startTime = time.time()
 
 panServo.updateTarget(pan_max)
+tiltServo.updateTarget(tilt_max)
 updated = False
 
 while panServo.position != panServo.target:
 
-    if not updated and time.time() - startTime > 1:
-        panServo.updateTarget(pan_min)
-        updated = True
-        print('Updated target =================================================')
+    # if not updated and time.time() - startTime > 1:
+    #     panServo.updateTarget(pan_min)
+    #     updated = True
+    #     print('Updated target =================================================')
     panServo.updatePosition(time.time())
     target.write('{0:.3f}, {1:.3f}, {2:.3f}\n'.format(time.time() - startTime, panServo.position, panServo.velocity))
     time.sleep(0.005)

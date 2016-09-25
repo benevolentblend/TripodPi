@@ -93,19 +93,48 @@ class Servo:
         self.rampDownTime = math.fabs(self.cruiseVelocity / self.rampDownAcceleration)
         self.rampDownDistance = calculateDistance(self.cruiseVelocity, self.rampDownAcceleration, self.rampDownTime)
 
+        # overshoot
         if math.fabs(self.rampUpDistance + self.rampUpDistance) > math.fabs(distance):
-            print('Ramp up and down bigger than distance!!!!')
-            self.target = self.position
+
+            self.rampUpDistance = distance / 2
+            self.rampUpTime = math.sqrt(math.fabs(distance / self.maxABSacceleration))
+
+            self.rampDownDistance = self.rampUpDistance
+            self.rampDownTime = self.rampUpTime
+
+            self.cruiseDistance = 0
+            self.cruiseTime = 0
+            self.cruiseVelocity = self.rampUpTime * self.maxABSacceleration
+
+            if distance < 0:
+                self.cruiseVelocity = -self.cruiseVelocity
+
+
+            if self.initialVelocity + self.cruiseVelocity > self.cruiseVelocity: # initial velocity approaching cruise velocity
+                # timeDiff = math.fabs(self.initialVelocity / self.maxABSacceleration)
+                # distanceDiff = calculateDistance(self.initialVelocity, self.maxABSacceleration, timeDiff)
+                # self.rampUpTime -= timeDiff
+                # self.rampUpDistance -= distanceDiff
+                #
+                # self.cruiseTime = timeDiff
+                # self.cruiseDistance = distanceDiff
+                #
+                self.position = self.target
+                return
+
+            if self.initialVelocity + self.cruiseVelocity < self.cruiseVelocity: # initial velocity dissenting cruise velocity
+                self.position = self.target
+                return
+
         else:
             self.cruiseDistance = distance - self.rampUpDistance - self.rampDownDistance
             self.cruiseTime = math.fabs(self.cruiseDistance / self.cruiseVelocity)
 
-            self.startTime = time.time()
-
-            self.startRampUp = 0
-            self.startCruise = self.rampUpTime
-            self.startRampDown = self.startCruise + self.cruiseTime
-            self.finished = self.startRampDown + self.rampDownTime
+        self.startRampUp = 0
+        self.startCruise = self.rampUpTime
+        self.startRampDown = self.startCruise + self.cruiseTime
+        self.finished = self.startRampDown + self.rampDownTime
+        self.startTime = time.time()
 
     def updatePosition(self, ctime):
         if self.position == self.target:
@@ -130,9 +159,11 @@ class Servo:
             self.velocity = 0
             stage = 'DONE'
 
-
-
         print('{0:10} position: {1:8.3f}, velocity: {2:8.3f}, time:{3:8.3f}'.format(stage, self.position, self.velocity, currentTime))
         pwm.set_pwm(self.port, 0, covD2S(self.position))
 
         return self.position
+
+    def setPosition(self, pos):
+        self.position = pos
+        #pwm.set_pwm(self.port, 0, covD2S(pos))
