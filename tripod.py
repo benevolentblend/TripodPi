@@ -20,10 +20,10 @@ target.write('time,position,velocity\n')
 panServo = Servo(pan, pan_max, pan_min)
 tiltServo = Servo(tilt, tilt_max, tilt_min)
 
-panServo.setPosition(pan_min)
+panServo.setPosition(10)
 tiltServo.setPosition(tilt_min)
 
-time.sleep(1)
+# time.sleep(1)
 
 
 panServo.maxABSVelocity = 1000.0
@@ -32,7 +32,7 @@ panServo.maxABSacceleration = 25.0
 startTime = time.time()
 
 panServo.updateTarget(pan_max)
-tiltServo.updateTarget(tilt_max)
+tiltServo.updateTarget(10)
 updated = False
 
 while panServo.position != panServo.target:

@@ -1,9 +1,9 @@
 import time
 import math
-import Adafruit_PCA9685
-
-pwm = Adafruit_PCA9685.PCA9685()
-pwm.set_pwm_freq(60)
+# import Adafruit_PCA9685
+#
+# pwm = Adafruit_PCA9685.PCA9685()
+# pwm.set_pwm_freq(60)
 
 class Servo:
     """
@@ -68,6 +68,32 @@ class Servo:
         self.startRampDown = 0
         self.finished = 0
 
+    def solveOverShootApproachingVelocity(self, distance):
+        print('Solving for approaching Velocity')
+        print('initial: {0:.3f}, start: {1:.3f}, target: {2:.3f}'.format(self.initialVelocity, self.startPosition, self.target))
+
+        self.rampUpTime = math.fabs(self.cruiseVelocity / self.rampUpAcceleration)
+        #distanceDiff = calculateDistance(0, self.rampUpAcceleration, timeDiff)
+
+        self.rampUpDistance = calculateDistance(self.initialVelocity, self.rampUpAcceleration, self.rampUpTime)
+
+
+    def solveOverShootDissentingVelocity(self, distance):
+        print('Solving for dissenting Velocity')
+        timeDiff = math.fabs(self.initialVelocity / self.rampUpAcceleration)
+        distanceDiff = calculateDistance(0, self.rampUpAcceleration, timeDiff)
+
+        self.rampUpTime = math.sqrt(math.fabs(distance / self.maxABSacceleration))
+        self.rampUpTime += timeDiff
+        self.rampUpDistance = calculateDistance(self.initialVelocity, self.rampUpAcceleration, self.rampUpTime)
+
+        self.cruiseVelocity = -(self.rampDownTime * self.rampDownAcceleration)
+
+        self.cruiseTime = distanceDiff / self.cruiseVelocity
+        self.cruiseDistance = distanceDiff
+
+
+        print('distanceDiff: {0}. timeDiff{1}'.format(distanceDiff, timeDiff))
 
     def updateTarget(self, newTarget):
         if newTarget == self.position:
@@ -106,21 +132,14 @@ class Servo:
             self.cruiseTime = 0
             self.cruiseVelocity = self.rampUpTime * self.rampUpAcceleration
 
-            if math.fabs(self.initialVelocity + self.cruiseVelocity) > math.fabs(self.cruiseVelocity): # initial velocity approaching cruise velocity
-                timeDiff = math.fabs(self.initialVelocity / self.rampUpAcceleration)
-                distanceDiff = calculateDistance(0, self.rampUpAcceleration, timeDiff)
+            print('cruiseVelocity: {0}, initialVelocity: {1}'.format(self.cruiseVelocity, self.initialVelocity))
+            print('rampUpTime: {0}, rampDownTime: {1}'.format(self.rampUpTime, self.rampDownTime))
 
-                self.rampUpTime -= timeDiff
-                self.rampUpDistance -= distanceDiff
-                self.cruiseTime = distanceDiff / self.cruiseVelocity
-                self.cruiseDistance = distanceDiff
+            if (self.initialVelocity > 0 and self.cruiseVelocity > 0) or (self.initialVelocity < 0 and self.cruiseVelocity < 0): # initial velocity approaching cruise velocity
+                self.solveOverShootApproachingVelocity(distance)
 
-
-            if math.fabs(self.initialVelocity + self.cruiseVelocity) < math.fabs(self.cruiseVelocity): # initial velocity dissenting cruise velocity
-
-                self.position = self.target
-                return
-
+            elif (self.initialVelocity < 0 and self.cruiseVelocity > 0) or (self.initialVelocity > 0 and self.cruiseVelocity < 0): # initial velocity dissenting cruise velocity
+                self.solveOverShootDissentingVelocity(distance)
         else:
             self.cruiseDistance = distance - self.rampUpDistance - self.rampDownDistance
             self.cruiseTime = math.fabs(self.cruiseDistance / self.cruiseVelocity)
@@ -155,10 +174,10 @@ class Servo:
             stage = 'DONE'
 
         print('{0:10} position: {1:8.3f}, velocity: {2:8.3f}, time:{3:8.3f}'.format(stage, self.position, self.velocity, currentTime))
-        pwm.set_pwm(self.port, 0, covD2S(self.position))
+        # pwm.set_pwm(self.port, 0, covD2S(self.position))
 
         return self.position
 
     def setPosition(self, pos):
         self.position = pos
-        pwm.set_pwm(self.port, 0, covD2S(pos))
+        # pwm.set_pwm(self.port, 0, covD2S(pos))

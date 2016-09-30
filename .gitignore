@@ -1,4 +1,4 @@
-data.csv
-graph.png
+data/*.csv
+graphs/*.png
 .ftpconfig
 *.pyc
