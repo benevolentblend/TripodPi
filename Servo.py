@@ -1,5 +1,6 @@
 import time
 import math
+from collections import deque
 # import Adafruit_PCA9685
 #
 # pwm = Adafruit_PCA9685.PCA9685()
@@ -12,6 +13,21 @@ class Servo:
     """
 
     global covD2S, covS2D, calculateDistance
+
+    class State:
+        """
+        Holds state information
+        """
+        def __init__(self, name):
+            self.name = name
+            self.time = 0
+            self.distance = 0
+            self.initialVelocity = 0
+            self.acceleration = 0
+
+        def __str__(self):
+            return "State: {0:8} t: {1:8.3f} d: {2:8.3f} iv: {3:8.3f} a:{4:8.3f}".format(self.name, self.time, self.distance, self.initialVelocity, self.acceleration)
+
 
     def covD2S(deg):
         sig = int((29 * deg) / 12 + 150)
@@ -48,25 +64,11 @@ class Servo:
 
         self.startPosition = 0
         self.startTime = 0
-        self.initialVelocity = 0
-        self.direction = 1
-
-        self.rampUpAcceleration = 0
-        self.rampDownAcceleration = 0
         self.cruiseVelocity = 0
 
-        self.rampUpTime = 0
-        self.cruiseTime = 0
-        self.rampDownTime = 0
-
-        self.rampUpDistance = 0
-        self.cruiseDistance = 0
-        self.rampDownDistance = 0
-
-        self.startRampUp = 0
-        self.startCruise = 0
-        self.startRampDown = 0
-        self.finished = 0
+        self.stateQueue = deque()
+        self.distanceCovered = 0
+        self.timePassed = 0
 
     def solveOverShootApproachingVelocity(self, distance):
         print('Solving for approaching Velocity')
@@ -96,84 +98,79 @@ class Servo:
         print('distanceDiff: {0}. timeDiff{1}'.format(distanceDiff, timeDiff))
 
     def updateTarget(self, newTarget):
-        if newTarget == self.position:
-            return
+        self.stateQueue.clear()
 
-        self.startPosition = self.position
-        self.initialVelocity = self.velocity
+        self.startTime = time.time()
+        self.timePassed = 0
         self.target = newTarget
+        self.startPosition = self.position
+        self.distanceCovered = self.startPosition
+        self.initialVelocity = self.velocity
         distance = self.target - self.startPosition
 
+        rampUp = self.State('rampUp')
+        cruise = self.State('cruise')
+        rampDown = self.State('rampDown')
+
         if distance > 0: # positive direction
-            self.rampUpAcceleration = self.maxABSacceleration
-            self.rampDownAcceleration = -self.maxABSacceleration
+            rampUp.acceleration = self.maxABSacceleration
+            rampDown.acceleration = -self.maxABSacceleration
             self.cruiseVelocity = self.maxABSVelocity
         else: # negative direction
-            self.rampUpAcceleration = -self.maxABSacceleration
-            self.rampDownAcceleration = self.maxABSacceleration
+            rampUp.acceleration = -self.maxABSacceleration
+            rampDown.acceleration = self.maxABSacceleration
             self.cruiseVelocity = -self.maxABSVelocity
 
-        self.rampUpTime = math.fabs((self.cruiseVelocity - self.initialVelocity) / self.rampUpAcceleration)
-        self.rampUpDistance = calculateDistance(self.initialVelocity, self.rampUpAcceleration, self.rampUpTime)
+        cruise.acceleration = 0
 
-        self.rampDownTime = math.fabs(self.cruiseVelocity / self.rampDownAcceleration)
-        self.rampDownDistance = calculateDistance(self.cruiseVelocity, self.rampDownAcceleration, self.rampDownTime)
+        rampUp.initialVelocity = self.initialVelocity
+        cruise.initialVelocity = self.cruiseVelocity
+        rampDown.initialVelocity = cruise.initialVelocity
 
-        # overshoot
-        if math.fabs(self.rampUpDistance + self.rampUpDistance) > math.fabs(distance):
+        rampUp.time = math.fabs((self.cruiseVelocity - self.initialVelocity) / rampUp.acceleration)
+        rampUp.distance = calculateDistance(self.initialVelocity, rampUp.acceleration, rampUp.time)
 
-            self.rampUpDistance = distance / 2
-            self.rampUpTime = math.sqrt(math.fabs(distance / self.maxABSacceleration))
+        rampDown.time = math.fabs(self.cruiseVelocity / rampDown.acceleration)
+        rampDown.distance = calculateDistance(self.cruiseVelocity, rampDown.acceleration, rampDown.time)
 
-            self.rampDownDistance = self.rampUpDistance
-            self.rampDownTime = self.rampUpTime
+        cruise.distance = distance - rampUp.distance - rampDown.distance
+        cruise.time = math.fabs(cruise.distance / self.cruiseVelocity)
 
-            self.cruiseDistance = 0
-            self.cruiseTime = 0
-            self.cruiseVelocity = self.rampUpTime * self.rampUpAcceleration
+        self.stateQueue.append(rampUp)
+        self.stateQueue.append(cruise)
+        self.stateQueue.append(rampDown)
 
-            print('cruiseVelocity: {0}, initialVelocity: {1}'.format(self.cruiseVelocity, self.initialVelocity))
-            print('rampUpTime: {0}, rampDownTime: {1}'.format(self.rampUpTime, self.rampDownTime))
+        print(rampUp)
+        print(cruise)
+        print(rampDown)
+    def getCurrentState(self, ctime):
+        if (len(self.stateQueue) == 0):
+            return None
+        cstate = self.stateQueue[0]
 
-            if (self.initialVelocity > 0 and self.cruiseVelocity > 0) or (self.initialVelocity < 0 and self.cruiseVelocity < 0): # initial velocity approaching cruise velocity
-                self.solveOverShootApproachingVelocity(distance)
-
-            elif (self.initialVelocity < 0 and self.cruiseVelocity > 0) or (self.initialVelocity > 0 and self.cruiseVelocity < 0): # initial velocity dissenting cruise velocity
-                self.solveOverShootDissentingVelocity(distance)
+        if (cstate.time < ctime - self.timePassed):
+            self.distanceCovered += cstate.distance
+            self.timePassed += cstate.time
+            self.stateQueue.popleft();
+        if (len(self.stateQueue) == 0):
+            self.velocity = 0
+            self.position = self.target
+            return None
         else:
-            self.cruiseDistance = distance - self.rampUpDistance - self.rampDownDistance
-            self.cruiseTime = math.fabs(self.cruiseDistance / self.cruiseVelocity)
+            return self.stateQueue[0]
 
-        self.startRampUp = 0
-        self.startCruise = self.rampUpTime
-        self.startRampDown = self.startCruise + self.cruiseTime
-        self.finished = self.startRampDown + self.rampDownTime
-        self.startTime = time.time()
-
-    def updatePosition(self, ctime):
-        if self.position == self.target:
+    def updatePosition(self, time):
+        ctime = time - self.startTime
+        cState = self.getCurrentState(ctime)
+        if(not cState):
             return self.position
 
-        currentTime = time.time() - self.startTime
+        stateTime = ctime - self.timePassed
+        self.position = self.distanceCovered
+        self.position += calculateDistance(cState.initialVelocity, cState.acceleration, stateTime)
+        self.velocity = cState.initialVelocity + cState.acceleration * stateTime
 
-        if self.startRampUp <= currentTime and currentTime < self.startCruise:
-            self.position = self.startPosition + calculateDistance(self.initialVelocity, self.rampUpAcceleration, currentTime)
-            self.velocity = self.initialVelocity + self.rampUpAcceleration * currentTime
-            stage = 'RAMP UP'
-        elif self.startCruise <= currentTime and currentTime < self.startRampDown:
-            self.position = self.startPosition + self.rampUpDistance + self.cruiseVelocity * (currentTime - self.startCruise)
-            self.velocity = self.cruiseVelocity
-            stage = 'CRUISE'
-        elif self.startRampDown <= currentTime and currentTime < self.finished:
-            self.position = self.startPosition + self.rampUpDistance + self.cruiseDistance + calculateDistance(self.cruiseVelocity, self.rampDownAcceleration, currentTime - self.startRampDown)
-            self.velocity = self.cruiseVelocity + self.rampDownAcceleration * (currentTime - self.startRampDown)
-            stage = 'RAMP DOWN'
-        else:
-            self.position = self.target
-            self.velocity = 0
-            stage = 'DONE'
-
-        print('{0:10} position: {1:8.3f}, velocity: {2:8.3f}, time:{3:8.3f}'.format(stage, self.position, self.velocity, currentTime))
+        print('{0:10} position: {1:8.3f}, velocity: {2:8.3f}, time:{3:8.3f}'.format(cState.name, self.position, self.velocity, ctime))
         # pwm.set_pwm(self.port, 0, covD2S(self.position))
 
         return self.position
