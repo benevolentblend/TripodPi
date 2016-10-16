@@ -70,33 +70,6 @@ class Servo:
         self.distanceCovered = 0
         self.timePassed = 0
 
-    def solveOverShootApproachingVelocity(self, distance):
-        print('Solving for approaching Velocity')
-        print('initial: {0:.3f}, start: {1:.3f}, target: {2:.3f}'.format(self.initialVelocity, self.startPosition, self.target))
-
-        self.rampUpTime = math.fabs(self.cruiseVelocity / self.rampUpAcceleration)
-        #distanceDiff = calculateDistance(0, self.rampUpAcceleration, timeDiff)
-
-        self.rampUpDistance = calculateDistance(self.initialVelocity, self.rampUpAcceleration, self.rampUpTime)
-
-
-    def solveOverShootDissentingVelocity(self, distance):
-        print('Solving for dissenting Velocity')
-        timeDiff = math.fabs(self.initialVelocity / self.rampUpAcceleration)
-        distanceDiff = calculateDistance(0, self.rampUpAcceleration, timeDiff)
-
-        self.rampUpTime = math.sqrt(math.fabs(distance / self.maxABSacceleration))
-        self.rampUpTime += timeDiff
-        self.rampUpDistance = calculateDistance(self.initialVelocity, self.rampUpAcceleration, self.rampUpTime)
-
-        self.cruiseVelocity = -(self.rampDownTime * self.rampDownAcceleration)
-
-        self.cruiseTime = distanceDiff / self.cruiseVelocity
-        self.cruiseDistance = distanceDiff
-
-
-        print('distanceDiff: {0}. timeDiff{1}'.format(distanceDiff, timeDiff))
-
     def updateTarget(self, newTarget):
         self.stateQueue.clear()
 
@@ -133,8 +106,52 @@ class Servo:
         rampDown.time = math.fabs(self.cruiseVelocity / rampDown.acceleration)
         rampDown.distance = calculateDistance(self.cruiseVelocity, rampDown.acceleration, rampDown.time)
 
-        cruise.distance = distance - rampUp.distance - rampDown.distance
-        cruise.time = math.fabs(cruise.distance / self.cruiseVelocity)
+
+        if math.fabs(rampUp.distance + rampDown.distance) > math.fabs(distance): # overshoot
+            rampUp.distance = distance / 2
+            rampUp.time = math.sqrt(math.fabs(distance / self.maxABSacceleration))
+
+            rampDown.distance = rampUp.distance
+            rampDown.time = rampUp.time
+            rampDown.initialVelocity = rampUp.time * rampUp.acceleration
+
+            cruise.distance = 0
+            cruise.time = 0
+            cruise.initialVelocity = rampUp.time * rampUp.acceleration
+
+            if((rampUp.initialVelocity < 0 and cruise.initialVelocity > 0) or (rampUp.initialVelocity > 0 and cruise.initialVelocity < 0)):
+                slowDown = self.State('slowDown')
+                slowDown.initialVelocity = rampUp.initialVelocity
+                slowDown.acceleration = rampUp.acceleration
+                slowDown.time = math.fabs(self.initialVelocity / rampUp.acceleration)
+                slowDown.distance = calculateDistance(self.initialVelocity, slowDown.acceleration, slowDown.time)
+                rampUp.initialVelocity = 0
+                self.stateQueue.append(slowDown)
+
+                cruise.distance = -slowDown.distance
+                cruise.time = cruise.distance / cruise.initialVelocity
+
+            if((rampUp.initialVelocity < 0 and cruise.initialVelocity < 0) or (rampUp.initialVelocity > 0 and cruise.initialVelocity > 0)):
+                slowDown = self.State('slowDown')
+                slowDown.initialVelocity = rampUp.initialVelocity
+                slowDown.acceleration = -rampUp.acceleration
+                slowDown.time = math.fabs(self.initialVelocity / rampUp.acceleration)
+                slowDown.distance = calculateDistance(self.initialVelocity, slowDown.acceleration, slowDown.time)
+                rampUp.initialVelocity = 0
+                self.stateQueue.append(slowDown)
+
+                distance -= slowDown.distance
+
+                rampUp.distance = distance / 2
+                rampUp.time = math.sqrt(math.fabs(distance / self.maxABSacceleration))
+
+                rampDown.distance = rampUp.distance
+                rampDown.time = rampUp.time
+                rampDown.initialVelocity = rampUp.time * rampUp.acceleration
+                cruise.initialVelocity = rampUp.time * rampUp.acceleration
+        else:
+            cruise.distance = distance - rampUp.distance - rampDown.distance
+            cruise.time = math.fabs(cruise.distance / self.cruiseVelocity)
 
         self.stateQueue.append(rampUp)
         self.stateQueue.append(cruise)

@@ -136,50 +136,72 @@ while servo.position != servo.target:
 initialVelocityNV.close()
 generateImage(initialVelocityNV, 'graphs/initialVelocityNV', 'Initial Velocity Negative Velocity')
 
-#
-# """ ****************************************
-#             Overshoot Test
-# ***************************************** """
-#
-# overshootPV = csvFile('data/overshootPV.csv')
-#
-# overshootPV.open()
-#
-# servo.maxABSVelocity = 2000
-# servo.maxABSacceleration = 5
-#
-# servo.setPosition(-25)
-# servo.updateTarget(75)
-#
-# startTime = time.time()
-#
-# while servo.position != servo.target:
-#     servo.updatePosition(time.time())
-#     currentTime = time.time() - startTime
-#     overshootPV.write('{0:.3f}, {1:.3f}, {2:.3f}\n'.format(currentTime, servo.position, servo.velocity))
-#     time.sleep(0.005)
-#
-# overshootPV.close()
-# generateImage(overshootPV, 'graphs/overshootPV', 'Overshoot Positive Position')
-#
-# overshootinitPPV = csvFile('data/overshootinitPPV.csv')
-#
-# overshootinitPPV.open()
-#
-# servo.maxABSVelocity = 2000
-# servo.maxABSacceleration = 5
-#
-# servo.velocity = -10
-# servo.setPosition(-25)
-# servo.updateTarget(75)
-#
-# startTime = time.time()
-#
-# while servo.position != servo.target:
-#     servo.updatePosition(time.time())
-#     currentTime = time.time() - startTime
-#     overshootinitPPV.write('{0:.3f}, {1:.3f}, {2:.3f}\n'.format(currentTime, servo.position, servo.velocity))
-#     time.sleep(0.005)
-#
-# overshootinitPPV.close()
-# generateImage(overshootinitPPV, 'graphs/overshootinitPPV', 'Overshoot with Positive Initial Velocity')
+
+""" ****************************************
+            Overshoot Test
+***************************************** """
+
+overshootPV = csvFile('data/overshootPV.csv')
+
+overshootPV.open()
+
+servo.maxABSVelocity = 2000
+servo.maxABSacceleration = 5
+
+servo.setPosition(-25)
+servo.updateTarget(75)
+
+startTime = time.time()
+
+while servo.position != servo.target:
+    servo.updatePosition(time.time())
+    currentTime = time.time() - startTime
+    overshootPV.write('{0:.3f}, {1:.3f}, {2:.3f}\n'.format(currentTime, servo.position, servo.velocity))
+    time.sleep(0.005)
+
+overshootPV.close()
+generateImage(overshootPV, 'graphs/overshootPV', 'Overshoot Positive Position')
+
+overshootinitPPV = csvFile('data/overshootinitPPV.csv')
+
+overshootinitPPV.open()
+
+servo.maxABSVelocity = 2000
+servo.maxABSacceleration = 5
+
+servo.velocity = -10
+servo.setPosition(-25)
+servo.updateTarget(75)
+
+startTime = time.time()
+
+while servo.position != servo.target:
+    servo.updatePosition(time.time())
+    currentTime = time.time() - startTime
+    overshootinitPPV.write('{0:.3f}, {1:.3f}, {2:.3f}\n'.format(currentTime, servo.position, servo.velocity))
+    time.sleep(0.005)
+
+overshootinitPPV.close()
+generateImage(overshootinitPPV, 'graphs/overshootinitPPV', 'Overshoot with Opposite Initial Velocity')
+
+overshootinitNPV = csvFile('data/overshootinitNPV.csv')
+
+overshootinitNPV.open()
+
+servo.maxABSVelocity = 2000
+servo.maxABSacceleration = 5
+
+servo.velocity = 10
+servo.setPosition(-25)
+servo.updateTarget(75)
+
+startTime = time.time()
+
+while servo.position != servo.target:
+    servo.updatePosition(time.time())
+    currentTime = time.time() - startTime
+    overshootinitNPV.write('{0:.3f}, {1:.3f}, {2:.3f}\n'.format(currentTime, servo.position, servo.velocity))
+    time.sleep(0.005)
+
+overshootinitNPV.close()
+generateImage(overshootinitNPV, 'graphs/overshootinitNPV', 'Overshoot with Same Initial Velocity')
