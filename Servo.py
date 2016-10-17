@@ -70,6 +70,28 @@ class Servo:
         self.distanceCovered = 0
         self.timePassed = 0
 
+    def findDirection(self, rampUp, rampDown, distance):
+        if distance > 0: # positive direction
+            rampUp.acceleration = self.maxABSacceleration
+            rampDown.acceleration = -self.maxABSacceleration
+            self.cruiseVelocity = self.maxABSVelocity
+        else: # negative direction
+            rampUp.acceleration = -self.maxABSacceleration
+            rampDown.acceleration = self.maxABSacceleration
+            self.cruiseVelocity = -self.maxABSVelocity
+
+    def solveOvershoot(self, rampUp, rampDown, cruise, distance):
+        rampUp.distance = distance / 2
+        rampUp.time = math.sqrt(math.fabs(distance / self.maxABSacceleration))
+
+        rampDown.distance = rampUp.distance
+        rampDown.time = rampUp.time
+        rampDown.initialVelocity = rampUp.time * rampUp.acceleration
+
+        cruise.distance = 0
+        cruise.time = 0
+        cruise.initialVelocity = rampUp.time * rampUp.acceleration
+
     def updateTarget(self, newTarget):
         self.stateQueue.clear()
 
@@ -85,14 +107,7 @@ class Servo:
         cruise = self.State('cruise')
         rampDown = self.State('rampDown')
 
-        if distance > 0: # positive direction
-            rampUp.acceleration = self.maxABSacceleration
-            rampDown.acceleration = -self.maxABSacceleration
-            self.cruiseVelocity = self.maxABSVelocity
-        else: # negative direction
-            rampUp.acceleration = -self.maxABSacceleration
-            rampDown.acceleration = self.maxABSacceleration
-            self.cruiseVelocity = -self.maxABSVelocity
+        self.findDirection(rampUp, rampDown, distance)
 
         cruise.acceleration = 0
 
@@ -108,30 +123,23 @@ class Servo:
 
 
         if math.fabs(rampUp.distance + rampDown.distance) > math.fabs(distance): # overshoot
-            rampUp.distance = distance / 2
-            rampUp.time = math.sqrt(math.fabs(distance / self.maxABSacceleration))
+            velocityDirection = self.initialVelocity / self.cruiseVelocity
+            print('velocity direction: {} initialVelocity: {} cruiseVelocity: {}'.format(velocityDirection, self.initialVelocity, self.cruiseVelocity))
+            if(velocityDirection < 0):
+                self.solveOvershoot(rampUp, rampDown, cruise, distance)
 
-            rampDown.distance = rampUp.distance
-            rampDown.time = rampUp.time
-            rampDown.initialVelocity = rampUp.time * rampUp.acceleration
-
-            cruise.distance = 0
-            cruise.time = 0
-            cruise.initialVelocity = rampUp.time * rampUp.acceleration
-
-            if((rampUp.initialVelocity < 0 and cruise.initialVelocity > 0) or (rampUp.initialVelocity > 0 and cruise.initialVelocity < 0)):
                 slowDown = self.State('slowDown')
                 slowDown.initialVelocity = rampUp.initialVelocity
                 slowDown.acceleration = rampUp.acceleration
                 slowDown.time = math.fabs(self.initialVelocity / rampUp.acceleration)
                 slowDown.distance = calculateDistance(self.initialVelocity, slowDown.acceleration, slowDown.time)
                 rampUp.initialVelocity = 0
-                self.stateQueue.append(slowDown)
 
                 cruise.distance = -slowDown.distance
                 cruise.time = cruise.distance / cruise.initialVelocity
+                self.stateQueue.append(slowDown)
 
-            if((rampUp.initialVelocity < 0 and cruise.initialVelocity < 0) or (rampUp.initialVelocity > 0 and cruise.initialVelocity > 0)):
+            elif(velocityDirection > 0):
                 slowDown = self.State('slowDown')
                 slowDown.initialVelocity = rampUp.initialVelocity
                 slowDown.acceleration = -rampUp.acceleration
@@ -142,13 +150,10 @@ class Servo:
 
                 distance -= slowDown.distance
 
-                rampUp.distance = distance / 2
-                rampUp.time = math.sqrt(math.fabs(distance / self.maxABSacceleration))
-
-                rampDown.distance = rampUp.distance
-                rampDown.time = rampUp.time
-                rampDown.initialVelocity = rampUp.time * rampUp.acceleration
-                cruise.initialVelocity = rampUp.time * rampUp.acceleration
+                self.findDirection(rampUp, rampDown, distance)
+                self.solveOvershoot(rampUp, rampDown, cruise, distance)
+            else:
+                self.solveOvershoot(rampUp, rampDown, cruise, distance)
         else:
             cruise.distance = distance - rampUp.distance - rampDown.distance
             cruise.time = math.fabs(cruise.distance / self.cruiseVelocity)
@@ -160,6 +165,7 @@ class Servo:
         print(rampUp)
         print(cruise)
         print(rampDown)
+
     def getCurrentState(self, ctime):
         if (len(self.stateQueue) == 0):
             return None
@@ -176,6 +182,17 @@ class Servo:
         else:
             return self.stateQueue[0]
 
+    def moveServo(self):
+        if(self.position > self.max):
+            print('POSITION GREATER THAN MAX')
+            return;
+        elif(self.position < self.min):
+            print('POSITION LESS THAN MIN')
+            return;
+        else:
+             #pwm.set_pwm(self.port, 0, covD2S(self.position))
+             return;
+
     def updatePosition(self, time):
         ctime = time - self.startTime
         cState = self.getCurrentState(ctime)
@@ -188,10 +205,9 @@ class Servo:
         self.velocity = cState.initialVelocity + cState.acceleration * stateTime
 
         print('{0:10} position: {1:8.3f}, velocity: {2:8.3f}, time:{3:8.3f}'.format(cState.name, self.position, self.velocity, ctime))
-        # pwm.set_pwm(self.port, 0, covD2S(self.position))
-
+        self.moveServo()
         return self.position
 
     def setPosition(self, pos):
         self.position = pos
-        # pwm.set_pwm(self.port, 0, covD2S(pos))
+        self.moveServo()
